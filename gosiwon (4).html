@@ -1,0 +1,625 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>파루스셀라 이화 관리 시스템</title>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;700;900&display=swap" rel="stylesheet">
+<script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:#060a10;color:#e2e8f0;font-family:'Noto Sans KR','Apple SD Gothic Neo',sans-serif;min-height:100vh;padding-bottom:60px}
+  input[type=date]::-webkit-calendar-picker-indicator{filter:invert(0.4)}
+  ::-webkit-scrollbar{width:4px}::-webkit-scrollbar-track{background:#060a10}::-webkit-scrollbar-thumb{background:#1e293b;border-radius:2px}
+  button:active{opacity:0.75}
+
+  #header{background:linear-gradient(90deg,#07101e,#0c1622);border-bottom:1px solid #0d1826;padding:14px 18px;display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
+  #logo{font-size:18px;font-weight:900;color:#f97316}
+  #syncStatus{display:flex;align-items:center;gap:5px;margin-top:3px;font-size:11px;color:#334155}
+  #syncDot{width:7px;height:7px;border-radius:50%;background:#16a34a;display:inline-block}
+  #statsRow{display:flex;gap:14px;flex-wrap:wrap}
+  .stat{text-align:center}.stat-num{font-size:20px;font-weight:900;line-height:1}.stat-label{font-size:9px;color:#334155;margin-top:2px}
+
+  #mainTabs{display:flex;gap:0;border-bottom:1px solid #0a1118;background:#070c14}
+  .main-tab{padding:10px 18px;font-size:13px;font-weight:700;color:#334155;cursor:pointer;border:none;background:transparent;font-family:inherit;border-bottom:2px solid transparent;transition:all 0.15s}
+  .main-tab.active{color:#f97316;border-bottom-color:#f97316}
+
+  #controls{display:flex;justify-content:space-between;align-items:center;padding:10px 18px;border-bottom:1px solid #0a1118;gap:10px;flex-wrap:wrap}
+  .floor-tab{display:flex;flex-direction:column;align-items:center;gap:1px;padding:6px 14px;border-radius:8px;border:1px solid #1e293b;cursor:pointer;min-width:52px;background:#0b1422;color:#475569;font-family:inherit;transition:all 0.15s;position:relative}
+  .floor-tab.active{background:#f97316;color:#fff;border-color:#f97316}
+  .floor-tab.selected-sms{border-color:#0ea5e9;background:#071a2e;color:#0ea5e9}
+  .floor-tab-num{font-weight:900;font-size:13px}.floor-tab-cnt{font-size:10px;opacity:0.8}
+  #ctrlRight{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+  #refreshBtn{padding:6px 13px;border-radius:7px;border:1px solid #1e293b;cursor:pointer;font-size:12px;color:#22c55e;background:transparent;font-family:inherit}
+  #smsFloorBtn{padding:6px 13px;border-radius:7px;border:1px solid #0ea5e9;cursor:pointer;font-size:12px;color:#0ea5e9;background:transparent;font-family:inherit;display:none}
+  #smsModeBtn{padding:6px 13px;border-radius:7px;border:1px solid #334155;cursor:pointer;font-size:12px;color:#94a3b8;background:transparent;font-family:inherit}
+
+  #filterRow{display:flex;gap:5px;padding:8px 14px;border-bottom:1px solid #0a1118;flex-wrap:wrap}
+  .filter-btn{padding:5px 10px;border-radius:7px;border:1px solid #0f1a2e;cursor:pointer;font-size:11px;font-weight:600;background:transparent;color:#334155;font-family:inherit;transition:all 0.12s}
+
+  #legend{display:flex;align-items:center;padding:6px 14px;border-bottom:1px solid #0a1118;background:#070c14;font-size:11px;flex-wrap:wrap;gap:4px}
+  #floorInfo{margin-left:auto;color:#1e293b;font-size:11px}
+
+  #grid{display:grid;grid-template-columns:repeat(5,1fr);gap:8px;padding:12px 14px 60px}
+  .card{border-radius:10px;border:1.5px solid #1e293b;padding:11px 10px 9px;cursor:pointer;height:118px;overflow:hidden;display:flex;flex-direction:column;background:#080d14;transition:border-color 0.2s}
+  .card.sms-selected{border-color:#0ea5e9!important;box-shadow:0 0 0 2px #0ea5e922}
+  .card-top{display:flex;justify-content:space-between;align-items:center}
+  .card-num{font-size:15px;font-weight:900;color:#253554}.card-num.occ{color:#f1f5f9}
+  .status-badge{font-size:9px;font-weight:700;border-radius:7px;padding:2px 5px;white-space:nowrap;border:1px solid}
+  .type-badge{font-size:10px;font-weight:700;border-radius:6px;padding:2px 6px;margin-top:3px;display:inline-block}
+  .card-name{font-size:13px;font-weight:700;color:#f1f5f9;margin-top:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .card-info{font-size:10px;color:#64748b}
+  .card-phone{font-size:10px;color:#0ea5e9;text-decoration:none;display:block;margin-top:1px}
+  .card-checkout{font-size:10px}
+  .card-price{font-size:11px;font-weight:700;color:#f97316}
+  .card-memo{font-size:10px;color:#475569;margin-top:auto;padding-top:4px;border-top:1px solid #1e293b;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .card-vacant{font-size:11px;color:#1e3a5f;margin-top:6px}
+
+  /* SMS 배너 */
+  #smsBanner{display:none;background:#071a2e;border-bottom:1px solid #0ea5e9;padding:10px 18px;align-items:center;gap:10px;flex-wrap:wrap}
+  #smsBanner.show{display:flex}
+  #smsBannerText{font-size:12px;color:#0ea5e9;flex:1}
+  #smsSendBtn{padding:7px 16px;background:#0ea5e9;border:none;border-radius:7px;color:#fff;font-weight:700;cursor:pointer;font-size:13px;font-family:inherit}
+  #smsCancelBtn{padding:7px 12px;background:transparent;border:1px solid #1e293b;border-radius:7px;color:#475569;cursor:pointer;font-size:12px;font-family:inherit}
+
+  /* 이력 탭 */
+  #historyView{padding:14px;display:none}
+  #historyView.active{display:block}
+  #historyControls{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex-wrap:wrap;gap:8px}
+  #historyControls h2{font-size:15px;font-weight:900;color:#f97316}
+  .hist-btn{padding:5px 12px;border-radius:7px;border:1px solid #1e293b;cursor:pointer;font-size:11px;font-weight:600;background:transparent;color:#334155;font-family:inherit}
+  .hist-btn.active{background:#f97316;color:#fff;border-color:#f97316}
+  #excelBtn{padding:7px 16px;border-radius:7px;border:none;background:#16a34a;color:#fff;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit}
+  #historyTable{width:100%;border-collapse:collapse;font-size:12px}
+  #historyTable th{background:#0b1422;color:#475569;padding:8px 10px;text-align:left;border-bottom:1px solid #1e293b;font-weight:700;font-size:11px}
+  #historyTable td{padding:8px 10px;border-bottom:1px solid #0a1118;color:#94a3b8;vertical-align:middle}
+  #historyTable tr:hover td{background:#0b1422}
+  .hist-type{font-size:10px;font-weight:700;padding:2px 7px;border-radius:6px;border:1px solid}
+  .hist-phone{color:#0ea5e9;text-decoration:none}
+
+  /* 검색 탭 */
+  #searchView{padding:14px;display:none}
+  #searchView.active{display:block}
+  #searchBox{width:100%;background:#0d1a2e;border:1px solid #1a3050;border-radius:10px;color:#e2e8f0;padding:12px 16px;font-size:16px;outline:none;font-family:inherit;margin-bottom:12px}
+  #searchBox:focus{border-color:#f97316}
+  #searchResult{font-size:13px}
+  .search-item{background:#0b1422;border:1px solid #1e293b;border-radius:10px;padding:12px 14px;margin-bottom:8px;display:flex;flex-direction:column;gap:4px}
+  .search-item-top{display:flex;justify-content:space-between;align-items:center}
+  .search-name{font-size:14px;font-weight:700;color:#f1f5f9}
+  .search-room{font-size:12px;color:#f97316;font-weight:700}
+  .search-info{font-size:11px;color:#475569}
+  .search-phone-link{font-size:12px;color:#0ea5e9;text-decoration:none;font-weight:600}
+
+  /* Modal */
+  #modalOverlay{position:fixed;inset:0;background:rgba(0,0,0,0.82);backdrop-filter:blur(8px);z-index:1000;display:none;align-items:center;justify-content:center;padding:16px}
+  #modalOverlay.open{display:flex}
+  #modal{background:#0b1524;border:1px solid #1e293b;border-radius:16px;padding:22px 20px;width:100%;max-width:400px;display:flex;flex-direction:column;gap:12px;box-shadow:0 30px 80px rgba(0,0,0,0.8);max-height:90vh;overflow-y:auto}
+  #modalHead{display:flex;justify-content:space-between;align-items:center}
+  #modalTitle{font-size:20px;font-weight:900;color:#f97316;display:flex;align-items:center;gap:10px}
+  #closeBtn{background:none;border:none;color:#475569;font-size:20px;cursor:pointer;padding:0;line-height:1}
+  .status-row{display:flex;gap:7px;margin-top:6px}
+  .status-btn{flex:1;padding:10px 0;border-radius:9px;border:1.5px solid #1e293b;background:transparent;color:#334155;font-weight:700;font-size:13px;cursor:pointer;font-family:inherit;transition:all 0.15s}
+  .lbl{font-size:11px;color:#64748b;font-weight:700;letter-spacing:0.3px}
+  .inp{background:#0d1a2e;border:1px solid #1a3050;border-radius:8px;color:#e2e8f0;padding:9px 11px;font-size:14px;outline:none;width:100%;font-family:inherit}
+  .inp:focus{border-color:#f97316}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  .field{display:flex;flex-direction:column;gap:5px}
+  .divider{border-top:1px solid #1e293b}
+  .price-wrap{position:relative}.price-wrap .inp{padding-left:28px}
+  .price-sym{position:absolute;left:10px;top:50%;transform:translateY(-50%);color:#475569;font-size:13px}
+  #modalFoot{display:flex;justify-content:space-between;align-items:center;margin-top:2px}
+  #clearBtn{padding:8px 14px;background:transparent;border:1px solid #7f1d1d;border-radius:7px;color:#ef4444;cursor:pointer;font-size:12px;font-family:inherit}
+  #cancelBtn{padding:8px 16px;background:transparent;border:1px solid #1e293b;border-radius:7px;color:#64748b;cursor:pointer;font-size:13px;font-family:inherit}
+  #saveBtn{padding:8px 24px;background:#f97316;border:none;border-radius:7px;color:#fff;font-weight:800;cursor:pointer;font-size:14px;font-family:inherit}
+
+  #loading{min-height:100vh;background:#060a10;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:12px}
+  .spinner{width:36px;height:36px;border:3px solid #f97316;border-top-color:transparent;border-radius:50%;animation:spin 0.8s linear infinite}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  @keyframes blink{0%,100%{opacity:1}50%{opacity:0.3}}
+  .blink{animation:blink 0.8s ease}
+</style>
+</head>
+<body>
+<div id="loading"><div class="spinner"></div></div>
+
+<div id="app" style="display:none">
+  <div id="header">
+    <div>
+      <div id="logo">🏢 파루스셀라 이화 관리 시스템</div>
+      <div id="syncStatus"><span id="syncDot"></span><span id="syncText">연결 중...</span></div>
+    </div>
+    <div id="statsRow">
+      <div class="stat"><div class="stat-num" id="s-occ" style="color:#22c55e">0</div><div class="stat-label">입실</div></div>
+      <div class="stat"><div class="stat-num" id="s-res" style="color:#a78bfa">0</div><div class="stat-label">입실예정</div></div>
+      <div class="stat"><div class="stat-num" id="s-vac" style="color:#475569">0</div><div class="stat-label">공실</div></div>
+      <div class="stat"><div class="stat-num" id="s-lev" style="color:#f59e0b">0</div><div class="stat-label">퇴실예정</div></div>
+      <div class="stat"><div class="stat-num" id="s-una" style="color:#dc2626">0</div><div class="stat-label">판매불가</div></div>
+      <div class="stat"><div class="stat-num" id="s-tot" style="color:#f97316">0</div><div class="stat-label">전체</div></div>
+    </div>
+  </div>
+
+  <div id="mainTabs">
+    <button class="main-tab active" onclick="switchTab('rooms')">🏠 호실 현황</button>
+    <button class="main-tab" onclick="switchTab('history')">📋 입퇴실 이력</button>
+    <button class="main-tab" onclick="switchTab('search')">🔍 전화번호 검색</button>
+  </div>
+
+  <!-- 호실 현황 -->
+  <div id="roomsView">
+    <!-- SMS 배너 -->
+    <div id="smsBanner">
+      <span id="smsBannerText">단체문자 모드 — 카드 또는 층을 선택하세요</span>
+      <button id="smsSendBtn" onclick="sendGroupSms()">📨 문자 보내기</button>
+      <button id="smsCancelBtn" onclick="cancelSmsMode()">취소</button>
+    </div>
+
+    <div id="controls">
+      <div id="floorTabs" style="display:flex;gap:6px;"></div>
+      <div id="ctrlRight">
+        <button id="smsModeBtn" onclick="toggleSmsMode()">📨 단체문자</button>
+        <button id="refreshBtn" onclick="syncNow()">↻</button>
+      </div>
+    </div>
+    <div id="filterRow"></div>
+    <div id="legend">
+      <span style="color:#84cc16;margin-right:14px">☀★ 큰방</span>
+      <span style="color:#38bdf8;margin-right:14px">☀ 외창</span>
+      <span style="color:#a78bfa;margin-right:14px">🌙 내창</span>
+      <span id="floorInfo"></span>
+    </div>
+    <div id="grid"></div>
+  </div>
+
+  <!-- 이력 탭 -->
+  <div id="historyView">
+    <div id="historyControls">
+      <h2>📋 입퇴실 이력</h2>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        <div style="display:flex;gap:6px">
+          <button class="hist-btn active" onclick="setHistFilter('all',this)">전체</button>
+          <button class="hist-btn" onclick="setHistFilter('checkin',this)">입실</button>
+          <button class="hist-btn" onclick="setHistFilter('checkout',this)">퇴실</button>
+        </div>
+        <button id="excelBtn" onclick="exportExcel()">⬇ 엑셀 다운로드</button>
+      </div>
+    </div>
+    <div style="overflow-x:auto">
+      <table id="historyTable">
+        <thead><tr>
+          <th>날짜/시간</th><th>구분</th><th>호실</th><th>이름</th><th>전화번호</th><th>입실일</th><th>퇴실예정일</th><th>월세</th><th>메모</th>
+        </tr></thead>
+        <tbody id="historyBody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- 검색 탭 -->
+  <div id="searchView">
+    <input id="searchBox" type="tel" placeholder="🔍 전화번호 뒷자리 4개 입력..." oninput="doSearch(this.value)" maxlength="11">
+    <div id="searchResult"><p style="color:#334155;text-align:center;margin-top:40px">뒷자리 4자리를 입력하면<br>현재 입실자 + 퇴실자까지 검색돼요</p></div>
+  </div>
+</div>
+
+<!-- Modal -->
+<div id="modalOverlay" onclick="closeModal(event)">
+  <div id="modal">
+    <div id="modalHead">
+      <div id="modalTitle"><span id="modalNum"></span><span id="modalTypeBadge"></span></div>
+      <button id="closeBtn" onclick="closeModalDirect()">✕</button>
+    </div>
+    <div>
+      <div class="lbl">상태</div>
+      <div class="status-row" id="statusBtns"></div>
+    </div>
+    <div class="divider"></div>
+    <div class="field"><label class="lbl">입실자명</label><input class="inp" id="fName" type="text" placeholder="홍길동"></div>
+    <div class="field"><label class="lbl">전화번호</label><input class="inp" id="fPhone" type="tel" placeholder="010-0000-0000"></div>
+    <div id="occFields" style="display:none;flex-direction:column;gap:12px">
+      <div class="grid2">
+        <div class="field"><label class="lbl">입실일</label><input class="inp" id="fCheckIn" type="date"></div>
+        <div class="field"><label class="lbl">퇴실예정일</label><input class="inp" id="fCheckOut" type="date"></div>
+      </div>
+      <div class="field">
+        <label class="lbl">월세 (원)</label>
+        <div class="price-wrap"><span class="price-sym">₩</span><input class="inp" id="fPrice" type="number" placeholder="350000"></div>
+      </div>
+    </div>
+    <div class="field"><label class="lbl">메모</label><input class="inp" id="fMemo" type="text" placeholder="특이사항, 수리내용 등" maxlength="50"></div>
+    <div id="modalFoot">
+      <button id="clearBtn" onclick="clearRoom()">초기화</button>
+      <div style="display:flex;gap:8px">
+        <button id="cancelBtn" onclick="closeModalDirect()">취소</button>
+        <button id="saveBtn" onclick="saveRoom()">저장</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const firebaseConfig={databaseURL:"https://parvus-sella-default-rtdb.firebaseio.com/"};
+firebase.initializeApp(firebaseConfig);
+const db=firebase.database();
+const roomsRef=db.ref('/');
+const historyRef=db.ref('history');
+
+const ROOM_CONFIG={
+  3:[{num:301,type:"외창"},{num:302,type:"내창"},{num:303,type:"내창"},{num:304,type:"내창"},{num:305,type:"내창"},{num:306,type:"외창"},{num:307,type:"외창-큰방"},{num:308,type:"내창"},{num:309,type:"외창"},{num:310,type:"외창-큰방"},{num:311,type:"내창"},{num:312,type:"내창"},{num:313,type:"외창-큰방"},{num:314,type:"외창"}],
+  4:[{num:401,type:"외창"},{num:402,type:"내창"},{num:403,type:"내창"},{num:404,type:"내창"},{num:405,type:"내창"},{num:406,type:"외창"},{num:407,type:"내창"},{num:408,type:"외창"},{num:409,type:"외창"},{num:410,type:"외창"},{num:411,type:"외창"},{num:412,type:"외창-큰방"},{num:413,type:"외창-큰방"}],
+  5:[{num:501,type:"외창"},{num:502,type:"내창"},{num:503,type:"내창"},{num:504,type:"내창"},{num:505,type:"내창"},{num:506,type:"외창"},{num:507,type:"외창-큰방"},{num:508,type:"내창"},{num:509,type:"외창"},{num:510,type:"외창"},{num:511,type:"외창-큰방"},{num:512,type:"내창"},{num:513,type:"내창"},{num:514,type:"외창-큰방"},{num:515,type:"외창"}],
+  6:[{num:601,type:"외창"},{num:602,type:"내창"},{num:603,type:"내창"},{num:604,type:"내창"},{num:605,type:"내창"},{num:606,type:"외창"},{num:607,type:"내창"},{num:608,type:"외창"},{num:609,type:"외창"},{num:610,type:"외창"},{num:611,type:"외창"},{num:612,type:"외창-큰방"},{num:613,type:"외창-큰방"}],
+};
+const FLOORS=[3,4,5,6];
+
+const STATUS_CFG={
+  reserved:{label:"입실예정",color:"#a78bfa",dimBg:"#0f0a1e",border:"#a78bfa88"},
+  occupied:{label:"입실",color:"#22c55e",dimBg:"#051a0a",border:"#22c55e88"},
+  leaving:{label:"퇴실예정",color:"#f59e0b",dimBg:"#1a1000",border:"#f59e0b88"},
+  vacant:{label:"공실",color:"#475569",dimBg:"#080d14",border:"#1e293b"},
+  unavailable:{label:"판매불가",color:"#dc2626",dimBg:"#1a0404",border:"#dc262688"},
+};
+
+function typeStyle(t){
+  if(t==="외창-큰방") return{border:"#1e293b",badge:"#84cc16",badgeBg:"#1a2e06",icon:"☀★",label:"큰방"};
+  if(t==="외창") return{border:"#1e293b",badge:"#38bdf8",badgeBg:"#071a2e",icon:"☀",label:"외창"};
+  return{border:"#1e293b",badge:"#a78bfa",badgeBg:"#150d2e",icon:"🌙",label:"내창"};
+}
+function todayStr(){return new Date().toISOString().slice(0,10)}
+function weekLaterStr(){const d=new Date();d.setDate(d.getDate()+7);return d.toISOString().slice(0,10)}
+function nowStr(){return new Date().toLocaleString('ko-KR')}
+
+function resolveStatus(room){
+  if(room.status==="occupied"||room.status==="leaving"||room.status==="reserved"){
+    if(room.checkIn&&room.checkIn>todayStr()) return"reserved";
+    if(room.checkOut&&room.checkOut<=weekLaterStr()) return"leaving";
+    return"occupied";
+  }
+  return room.status;
+}
+function makeDefaultRoom(num,type,floor){return{id:String(num),floor,num,type,status:"vacant",name:"",phone:"",checkIn:"",checkOut:"",price:"",memo:""}}
+
+let rooms={},history=[],activeFloor=3,activeFilter="all",activeTab="rooms";
+let histFilter="all",selectedId=null,currentStatus="vacant";
+let smsMode=false,smsSelectedRooms=new Set(),smsSelectedFloors=new Set();
+
+FLOORS.forEach(f=>ROOM_CONFIG[f].forEach(({num,type})=>{rooms[num]=makeDefaultRoom(num,type,f)}));
+
+roomsRef.on('value',snap=>{
+  const data=snap.val()||{};
+  Object.keys(data).forEach(id=>{
+    if(id==='history') return;
+    if(rooms[id]) rooms[id]={...rooms[id],...data[id]};
+  });
+  document.getElementById('loading').style.display='none';
+  document.getElementById('app').style.display='block';
+  render(); updateSyncTime();
+});
+
+historyRef.on('value',snap=>{
+  const data=snap.val()||{};
+  history=Object.values(data).sort((a,b)=>b.ts-a.ts);
+  renderHistory();
+});
+
+function syncNow(){
+  roomsRef.once('value',snap=>{
+    const data=snap.val()||{};
+    Object.keys(data).forEach(id=>{if(id==='history') return; if(rooms[id]) rooms[id]={...rooms[id],...data[id]};});
+    render(); updateSyncTime();
+  });
+}
+function updateSyncTime(){
+  const dot=document.getElementById('syncDot');
+  dot.classList.add('blink');setTimeout(()=>dot.classList.remove('blink'),800);
+  document.getElementById('syncText').textContent='실시간 동기화 · '+new Date().toLocaleTimeString('ko-KR');
+}
+function addHistory(type,room){
+  const entry={ts:Date.now(),datetime:nowStr(),type,num:room.num,name:room.name||'',phone:room.phone||'',checkIn:room.checkIn||'',checkOut:room.checkOut||'',price:room.price||'',memo:room.memo||''};
+  historyRef.push(entry);
+}
+
+function render(){renderFloorTabs();renderFilters();renderGrid();renderStats();}
+
+function switchTab(tab){
+  activeTab=tab;
+  document.querySelectorAll('.main-tab').forEach((el,i)=>{
+    el.classList.toggle('active',['rooms','history','search'][i]===tab);
+  });
+  document.getElementById('roomsView').style.display=tab==='rooms'?'block':'none';
+  document.getElementById('historyView').style.display=tab==='history'?'block':'none';
+  document.getElementById('searchView').style.display=tab==='search'?'block':'none';
+}
+
+// ── SMS 단체문자 ───────────────────────────────────────────────────────────────
+function toggleSmsMode(){
+  smsMode=!smsMode;
+  smsSelectedRooms.clear(); smsSelectedFloors.clear();
+  document.getElementById('smsBanner').classList.toggle('show',smsMode);
+  document.getElementById('smsModeBtn').style.color=smsMode?'#0ea5e9':'#94a3b8';
+  document.getElementById('smsModeBtn').style.borderColor=smsMode?'#0ea5e9':'#334155';
+  renderFloorTabs(); renderGrid();
+}
+function cancelSmsMode(){smsMode=false;smsSelectedRooms.clear();smsSelectedFloors.clear();document.getElementById('smsBanner').classList.remove('show');document.getElementById('smsModeBtn').style.color='#94a3b8';document.getElementById('smsModeBtn').style.borderColor='#334155';renderFloorTabs();renderGrid();}
+
+function toggleFloorSms(floor,e){
+  e.stopPropagation();
+  if(!smsMode) return;
+  if(smsSelectedFloors.has(floor)){
+    smsSelectedFloors.delete(floor);
+    Object.values(rooms).filter(r=>r.floor===floor).forEach(r=>smsSelectedRooms.delete(r.num));
+  } else {
+    smsSelectedFloors.add(floor);
+    Object.values(rooms).filter(r=>r.floor===floor&&r.phone&&r.status==="occupied").forEach(r=>smsSelectedRooms.add(r.num));
+  }
+  updateSmsBanner(); renderFloorTabs(); renderGrid();
+}
+
+function toggleRoomSms(num,e){
+  e.stopPropagation();
+  if(!smsMode) return;
+  const room=rooms[num];
+  if(!room.phone){alert('전화번호가 없는 입실자예요!');return;}
+  if(smsSelectedRooms.has(num)) smsSelectedRooms.delete(num);
+  else smsSelectedRooms.add(num);
+  updateSmsBanner(); renderGrid();
+}
+
+function updateSmsBanner(){
+  const count=smsSelectedRooms.size;
+  document.getElementById('smsBannerText').textContent=count>0?`${count}명 선택됨 — 문자 보내기 버튼을 눌러주세요`:'층 탭 또는 카드를 눌러 대상을 선택하세요';
+}
+
+function sendGroupSms(){
+  const phones=[...smsSelectedRooms].map(num=>rooms[num]?.phone).filter(Boolean);
+  if(phones.length===0){alert('전화번호가 있는 입실자를 선택해주세요!');return;}
+  const nums=phones.map(p=>p.replace(/-/g,'')).join(',');
+  window.location.href=`sms:${nums}`;
+}
+
+function renderFloorTabs(){
+  document.getElementById('floorTabs').innerHTML=FLOORS.map(f=>{
+    const fc=Object.values(rooms).filter(r=>r.floor===f);
+    const fo=fc.filter(r=>r.status==="occupied").length;
+    const isSmsSelected=smsSelectedFloors.has(f);
+    const cls=`floor-tab${f===activeFloor&&!smsMode?' active':''}${isSmsSelected?' selected-sms':''}`;
+    return `<button class="${cls}" onclick="${smsMode?`toggleFloorSms(${f},event)`:`setFloor(${f})`}">
+      <span class="floor-tab-num">${f}층</span><span class="floor-tab-cnt">${fo}/${fc.length}</span>
+    </button>`;
+  }).join('');
+}
+
+function renderFilters(){
+  const filters=[
+    ["all","전체",null],["occupied","입실","#22c55e"],["reserved","입실예정","#a78bfa"],
+    ["vacant","공실","#475569"],["leaving","퇴실예정","#f59e0b"],["unavailable","판매불가","#dc2626"],
+    ["외창-큰방","☀★큰방","#84cc16"],["외창","☀외창","#38bdf8"],["내창","🌙내창","#a78bfa"],
+  ];
+  document.getElementById('filterRow').innerHTML=filters.map(([v,l,c])=>{
+    const active=activeFilter===v;
+    return `<button class="filter-btn" style="background:${active?(c?c+'25':'#1e293b'):'transparent'};color:${active?(c||'#e2e8f0'):'#334155'};border-color:${active?(c||'#475569'):'#0f1a2e'}" onclick="setFilter('${v}')">${l}</button>`;
+  }).join('');
+}
+
+function renderStats(){
+  const all=Object.values(rooms);
+  document.getElementById('s-occ').textContent=all.filter(r=>resolveStatus(r)==="occupied").length;
+  document.getElementById('s-res').textContent=all.filter(r=>resolveStatus(r)==="reserved").length;
+  document.getElementById('s-vac').textContent=all.filter(r=>r.status==="vacant").length;
+  document.getElementById('s-lev').textContent=all.filter(r=>resolveStatus(r)==="leaving").length;
+  document.getElementById('s-una').textContent=all.filter(r=>r.status==="unavailable").length;
+  document.getElementById('s-tot').textContent=all.length;
+}
+
+function renderGrid(){
+  const floorRooms=Object.values(rooms).filter(r=>r.floor===activeFloor).sort((a,b)=>a.num-b.num);
+  let display;
+  if(activeFilter==="all") display=floorRooms;
+  else if(["occupied","reserved","leaving","unavailable"].includes(activeFilter)) display=floorRooms.filter(r=>resolveStatus(r)===activeFilter);
+  else if(activeFilter==="vacant") display=floorRooms.filter(r=>r.status==="vacant");
+  else display=floorRooms.filter(r=>r.type===activeFilter);
+
+  document.getElementById('floorInfo').textContent=`${activeFloor}층 ${floorRooms.length}실 · ${display.length}개 표시`;
+
+  document.getElementById('grid').innerHTML=display.map(room=>{
+    const resolved=resolveStatus(room);
+    const cfg=STATUS_CFG[resolved];
+    const ts=typeStyle(room.type);
+    const isOcc=resolved==="occupied"||resolved==="leaving"||resolved==="reserved";
+    const borderColor=resolved==="vacant"?ts.border:cfg.border;
+    const smsSel=smsSelectedRooms.has(room.num);
+
+    let content='';
+    if(isOcc){
+      const phoneHtml=room.phone
+        ? `<a class="card-phone" href="sms:${room.phone.replace(/-/g,'')}" onclick="event.stopPropagation()">📱 ${room.phone}</a>`
+        : '';
+      content=`
+        <div class="card-name">${(room.name||'—').slice(0,4)}</div>
+        ${phoneHtml}
+        ${room.checkIn?`<div class="card-info">입 ${room.checkIn.slice(5)}</div>`:''}
+        ${room.checkOut?`<div class="card-checkout" style="color:${resolved==="leaving"?"#f59e0b":"#334155"}">퇴 ${room.checkOut.slice(5)}</div>`:''}
+        ${room.price?`<div class="card-price">₩${Number(room.price).toLocaleString()}</div>`:''}
+      `;
+    } else if(resolved==="unavailable"){
+      content=`<div style="font-size:11px;color:#dc262655;margin-top:6px">사용불가</div>`;
+    } else {
+      content=`<div class="card-vacant">비어있음</div>`;
+    }
+
+    const clickFn=smsMode&&isOcc?`toggleRoomSms(${room.num},event)`:`openModal(${room.num})`;
+    return `<div class="card${smsSel?' sms-selected':''}" style="border-color:${smsSel?'#0ea5e9':borderColor};background:${cfg.dimBg}" onclick="${clickFn}">
+      <div class="card-top">
+        <span class="card-num${isOcc?' occ':''}">${room.num}</span>
+        <span class="status-badge" style="color:${cfg.color};background:${cfg.color}22;border-color:${cfg.color}55">${cfg.label}</span>
+      </div>
+      <span class="type-badge" style="color:${ts.badge};background:${ts.badgeBg};border:1px solid ${ts.badge}44">${ts.icon} ${ts.label}</span>
+      ${content}
+      ${room.memo?`<div class="card-memo">📝 ${room.memo}</div>`:''}
+    </div>`;
+  }).join('');
+}
+
+// ── 이력 ──────────────────────────────────────────────────────────────────────
+function setHistFilter(f,el){
+  histFilter=f;
+  document.querySelectorAll('.hist-btn').forEach(b=>b.classList.remove('active'));
+  el.classList.add('active');
+  renderHistory();
+}
+
+function renderHistory(){
+  const list=histFilter==='all'?history:history.filter(h=>h.type===histFilter);
+  document.getElementById('historyBody').innerHTML=list.length===0
+    ?'<tr><td colspan="9" style="text-align:center;color:#334155;padding:30px">이력이 없습니다</td></tr>'
+    :list.map(h=>{
+      const isIn=h.type==='checkin';
+      const col=isIn?'#22c55e':'#f59e0b';
+      const phoneHtml=h.phone?`<a class="hist-phone" href="sms:${h.phone.replace(/-/g,'')}">${h.phone}</a>`:'-';
+      return `<tr>
+        <td style="color:#475569;white-space:nowrap">${h.datetime}</td>
+        <td><span class="hist-type" style="color:${col};border-color:${col}55;background:${col}18">${isIn?'입실':'퇴실'}</span></td>
+        <td style="font-weight:700;color:#e2e8f0">${h.num}호</td>
+        <td style="color:#e2e8f0">${h.name}</td>
+        <td>${phoneHtml}</td>
+        <td>${h.checkIn||'-'}</td>
+        <td>${h.checkOut||'-'}</td>
+        <td style="color:#f97316">${h.price?'₩'+Number(h.price).toLocaleString():'-'}</td>
+        <td style="color:#475569">${h.memo||'-'}</td>
+      </tr>`;
+    }).join('');
+}
+
+// ── 전화번호 검색 ─────────────────────────────────────────────────────────────
+function doSearch(q){
+  q=q.trim();
+  if(q.length<4){document.getElementById('searchResult').innerHTML='<p style="color:#334155;text-align:center;margin-top:40px">4자리 이상 입력해주세요</p>';return;}
+
+  const results=[];
+
+  // 현재 입실자
+  Object.values(rooms).forEach(r=>{
+    if(!r.phone) return;
+    const clean=r.phone.replace(/-/g,'');
+    if(clean.includes(q)||r.phone.includes(q)){
+      results.push({src:'current',room:r.num,name:r.name,phone:r.phone,checkIn:r.checkIn,checkOut:r.checkOut,status:resolveStatus(r)});
+    }
+  });
+
+  // 이력 (퇴실자 포함)
+  history.forEach(h=>{
+    if(!h.phone) return;
+    const clean=h.phone.replace(/-/g,'');
+    if(clean.includes(q)||h.phone.includes(q)){
+      // 중복 방지
+      const already=results.find(r=>r.name===h.name&&r.phone===h.phone&&r.src==='current');
+      if(!already) results.push({src:'history',room:h.num,name:h.name,phone:h.phone,checkIn:h.checkIn,checkOut:h.checkOut,type:h.type,datetime:h.datetime});
+    }
+  });
+
+  if(results.length===0){document.getElementById('searchResult').innerHTML='<p style="color:#334155;text-align:center;margin-top:40px">검색 결과가 없어요</p>';return;}
+
+  document.getElementById('searchResult').innerHTML=results.map(r=>{
+    const isCurrent=r.src==='current';
+    const cfg=isCurrent?(STATUS_CFG[r.status]||STATUS_CFG.vacant):null;
+    return `<div class="search-item">
+      <div class="search-item-top">
+        <span class="search-name">${r.name}</span>
+        <span class="search-room">${r.room}호 ${isCurrent?`<span style="font-size:10px;color:${cfg.color}">${cfg.label}</span>`:'<span style="font-size:10px;color:#475569">이력</span>'}</span>
+      </div>
+      <a class="search-phone-link" href="sms:${r.phone.replace(/-/g,'')}">📱 ${r.phone}</a>
+      <span class="search-info">입실 ${r.checkIn||'-'} / 퇴실예정 ${r.checkOut||'-'}${!isCurrent?` / ${r.datetime}`:''}</span>
+    </div>`;
+  }).join('');
+}
+
+// ── 엑셀 내보내기 ─────────────────────────────────────────────────────────────
+function exportExcel(){
+  const today=todayStr();
+  const roomRows=[['호실','타입','상태','입실자명','전화번호','입실일','퇴실예정일','월세','메모']];
+  Object.values(rooms).sort((a,b)=>a.num-b.num).forEach(r=>{
+    const st=STATUS_CFG[resolveStatus(r)];
+    roomRows.push([r.num,r.type,st.label,r.name,r.phone,r.checkIn,r.checkOut,r.price?Number(r.price):'',r.memo]);
+  });
+  const histRows=[['날짜/시간','구분','호실','이름','전화번호','입실일','퇴실예정일','월세','메모']];
+  history.forEach(h=>{
+    histRows.push([h.datetime,h.type==='checkin'?'입실':'퇴실',h.num+'호',h.name,h.phone||'',h.checkIn,h.checkOut,h.price?Number(h.price):'',h.memo]);
+  });
+  const wb=XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(roomRows),'호실현황');
+  XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(histRows),'입퇴실이력');
+  XLSX.writeFile(wb,`파루스셀라_${today}.xlsx`);
+}
+
+// ── 모달 ──────────────────────────────────────────────────────────────────────
+const MODAL_STATUS=[
+  {v:"occupied",label:"입실",color:"#22c55e"},
+  {v:"vacant",label:"공실",color:"#475569"},
+  {v:"unavailable",label:"판매불가",color:"#dc2626"},
+];
+
+function openModal(num){
+  selectedId=num;
+  const room=rooms[num];
+  const ts=typeStyle(room.type);
+  document.getElementById('modalNum').textContent=num+'호';
+  document.getElementById('modal').style.borderColor=ts.border;
+  document.getElementById('modalTypeBadge').innerHTML=`<span style="font-size:12px;font-weight:700;color:${ts.badge};background:${ts.badgeBg};border:1px solid ${ts.badge}44;border-radius:6px;padding:2px 7px">${ts.icon} ${ts.label}</span>`;
+  currentStatus=(room.status==="leaving"||room.status==="reserved")?"occupied":room.status;
+  document.getElementById('fName').value=room.name||'';
+  document.getElementById('fPhone').value=room.phone||'';
+  renderStatusBtns();
+  document.getElementById('fCheckIn').value=room.checkIn||'';
+  document.getElementById('fCheckOut').value=room.checkOut||'';
+  document.getElementById('fPrice').value=room.price||'';
+  document.getElementById('fMemo').value=room.memo||'';
+  updateOccFields();
+  document.getElementById('modalOverlay').classList.add('open');
+}
+
+function renderStatusBtns(){
+  document.getElementById('statusBtns').innerHTML=MODAL_STATUS.map(({v,label,color})=>{
+    const active=currentStatus===v;
+    return `<button class="status-btn" style="border-color:${active?color:'#1e293b'};background:${active?color+'25':'transparent'};color:${active?color:'#334155'}" onclick="setStatus('${v}')">${label}</button>`;
+  }).join('');
+}
+function setStatus(v){currentStatus=v;renderStatusBtns();updateOccFields();}
+function updateOccFields(){document.getElementById('occFields').style.display=currentStatus==="occupied"?"flex":"none";}
+
+function saveRoom(){
+  const prevRoom=rooms[selectedId];
+  const updated={...prevRoom,status:currentStatus,
+    name:document.getElementById('fName').value,
+    phone:document.getElementById('fPhone').value,
+    checkIn:currentStatus==="occupied"?document.getElementById('fCheckIn').value:prevRoom.checkIn,
+    checkOut:currentStatus==="occupied"?document.getElementById('fCheckOut').value:prevRoom.checkOut,
+    price:currentStatus==="occupied"?document.getElementById('fPrice').value:prevRoom.price,
+    memo:document.getElementById('fMemo').value,
+  };
+  const wasOcc=prevRoom.status==="occupied"||prevRoom.status==="leaving"||prevRoom.status==="reserved";
+  const nowOcc=currentStatus==="occupied";
+  if(!wasOcc&&nowOcc&&updated.name) addHistory('checkin',updated);
+  else if(wasOcc&&!nowOcc&&prevRoom.name) addHistory('checkout',prevRoom);
+  else if(wasOcc&&nowOcc&&prevRoom.name!==updated.name&&updated.name){addHistory('checkout',prevRoom);addHistory('checkin',updated);}
+  rooms[selectedId]=updated;
+  roomsRef.child(String(selectedId)).set(updated);
+  closeModalDirect();render();
+}
+
+function clearRoom(){
+  const room=rooms[selectedId];
+  const wasOcc=room.status==="occupied"||room.status==="leaving"||room.status==="reserved";
+  if(wasOcc&&room.name) addHistory('checkout',room);
+  const cleared=makeDefaultRoom(room.num,room.type,room.floor);
+  rooms[selectedId]=cleared;
+  roomsRef.child(String(selectedId)).set(cleared);
+  closeModalDirect();render();
+}
+
+function closeModal(e){if(e.target===document.getElementById('modalOverlay')) closeModalDirect();}
+function closeModalDirect(){document.getElementById('modalOverlay').classList.remove('open');selectedId=null;}
+function setFloor(f){activeFloor=f;activeFilter="all";render();}
+function setFilter(f){activeFilter=f;render();}
+</script>
+</body>
+</html>
